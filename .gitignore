@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Бэкенд «Слушаем вместе»: загруженные треки и служебные файлы
+backend/catalog/
+backend/data/
+backend/.env
