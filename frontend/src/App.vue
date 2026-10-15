@@ -1,14 +1,11 @@
 <template>
   <div id="app">
-    <!-- Шапка сайта -->
     <Header />
 
-    <!-- Здесь будут отображаться страницы (включая вашу форму входа) -->
     <main class="main-content">
       <router-view />
     </main>
 
-    <!-- Подвал сайта -->
     <Footer />
   </div>
 </template>

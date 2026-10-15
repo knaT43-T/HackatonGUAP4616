@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 
 from app.config import settings
 from app.core import sessions
@@ -34,5 +34,5 @@ def require_host(room: Room, principal: Principal) -> None:
     require_member(room, principal)
     if not room.is_host(principal.id):
         raise HTTPException(
-            status_code=403, detail="Управлять воспроизведением может только создатель комнаты"
+            status_code=403, detail="Управлять воспроизведением может только хост комнаты"
         )

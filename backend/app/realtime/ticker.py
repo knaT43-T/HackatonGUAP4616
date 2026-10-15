@@ -7,7 +7,8 @@ from app.config import settings
 from app.core import sessions
 from app.realtime.events import queue_event, state_event
 from app.realtime.hub import hub
-from app.services import playback, rooms as rooms_service
+from app.services import playback
+from app.services import rooms as rooms_service
 
 log = logging.getLogger("ticker")
 

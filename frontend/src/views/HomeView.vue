@@ -34,6 +34,7 @@
           placeholder="Вася"
           maxlength="32"
           autocomplete="off"
+          autofocus
           :disabled="loading"
         />
         <button
@@ -52,11 +53,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
-import { useRouter } from "vue-router";
-import { loginGuest } from "../api/auth";
+import { computed, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
+import { ensureSession, signIn } from "../state/auth";
+
+const route = useRoute();
 const router = useRouter();
+
 const nickname = ref("");
 const loading = ref(false);
 const error = ref("");
@@ -65,13 +69,25 @@ const isValid = computed(
   () => nickname.value.length >= 2 && nickname.value.length <= 32,
 );
 
+// Куда вернуть человека после входа (например, если сработал guard приватной страницы).
+const redirectTo = computed(() =>
+  typeof route.query.redirect === "string" ? route.query.redirect : "/rooms",
+);
+
+// Если сессия уже жива (cookie на месте) — сразу уводим в комнаты.
+onMounted(async () => {
+  if (await ensureSession()) {
+    router.replace(redirectTo.value);
+  }
+});
+
 async function handleLogin() {
-  if (!isValid.value) return;
+  if (!isValid.value || loading.value) return;
   loading.value = true;
   error.value = "";
   try {
-    await loginGuest(nickname.value);
-    router.push("/rooms");
+    await signIn(nickname.value);
+    router.replace(redirectTo.value);
   } catch (e) {
     error.value = e.message || "Не удалось войти";
   } finally {

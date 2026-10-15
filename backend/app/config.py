@@ -18,11 +18,13 @@ class Settings(BaseSettings):
     app_name: str = "Слушаем вместе"
     host: str = "0.0.0.0"
     port: int = 8000
-    reload: bool = True
+    reload: bool = False
 
     cookie_name: str = "pid"
+    cookie_secure: bool = False
     session_ttl_days: int = 30
     nickname_max_len: int = 32
+    room_name_max_len: int = 60
 
     cors_origins: list[str] = [
         "http://localhost:5173",
@@ -50,6 +52,10 @@ class Settings(BaseSettings):
     room_idle_ttl_min: int = 30
     ticker_interval_ms: int = 1000
     broadcast_timeout_s: float = 5.0
+
+    # Логи
+    log_level: str = "INFO"
+    access_log: bool = True
 
     @property
     def tracks_file(self) -> Path:

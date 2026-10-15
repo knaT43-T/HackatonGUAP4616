@@ -1,21 +1,26 @@
-const API_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from "../config";
 
 export class ApiError extends Error {
   constructor(status, detail, code) {
     super(detail || "Ошибка запроса");
+    this.name = "ApiError";
     this.status = status;
     this.code = code;
   }
 }
 
 export async function api(path, options = {}) {
+  const { headers, ...rest } = options;
+  // FormData сам выставляет Content-Type с boundary — руками его трогать нельзя.
+  const isFormData = rest.body instanceof FormData;
+
   const res = await fetch(`${API_URL}${path}`, {
-    credentials: "include",
+    credentials: "include", // без этого cookie "pid" не полетит
+    ...rest,
     headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(headers || {}),
     },
-    ...options,
   });
 
   if (!res.ok) {

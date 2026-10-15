@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import get_principal, get_room_or_404, require_member
-from app.core.models import Principal, Room
+from app.core.models import Principal
+from app.realtime.events import members_event, system_event
+from app.realtime.hub import hub
 from app.schemas import CreateRoomRequest, JoinRoomRequest
 from app.services import rooms as rooms_service
 
@@ -66,8 +68,16 @@ async def leave_room(
 ) -> dict:
     room = get_room_or_404(room_id)
     require_member(room, principal)
-    rooms_service.drop_participant(room, principal.id)
+    removed = rooms_service.drop_participant(room, principal.id)
     promoted = rooms_service.ensure_host(room)
+
+    if removed:
+        await hub.broadcast(room.id, members_event(room))
+    if promoted:
+        new_host = room.participants.get(promoted)
+        nickname = new_host.nickname if new_host else "участник"
+        await hub.broadcast(room.id, system_event(f"Управление передано: {nickname}", room))
+
     payload: dict = {"left": True}
     if promoted:
         payload["new_host_id"] = promoted

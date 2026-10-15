@@ -10,8 +10,6 @@ _rooms: dict[str, Room] = {}
 _rooms_by_code: dict[str, str] = {}
 _lock = asyncio.Lock()
 
-MAX_ROOM_NAME_LEN = 60
-
 
 class RoomError(Exception):
     def __init__(self, code: str, message: str) -> None:
@@ -24,8 +22,10 @@ def normalize_room_name(raw: str | None) -> str:
     name = (raw or "").strip()
     if not name:
         raise RoomError("invalid_name", "Название комнаты не может быть пустым")
-    if len(name) > MAX_ROOM_NAME_LEN:
-        raise RoomError("invalid_name", f"Название длиннее {MAX_ROOM_NAME_LEN} символов")
+    if len(name) > settings.room_name_max_len:
+        raise RoomError(
+            "invalid_name", f"Название длиннее {settings.room_name_max_len} символов"
+        )
     return name
 
 
@@ -95,9 +95,15 @@ def attach(room: Room, principal: Principal, *, connected: bool = True) -> Parti
         participant.nickname = principal.nickname
 
     participant.connected = connected
-    if principal.id == room.creator_id:
+    if principal.id == room.creator_id and connected:
+        # Создатель вернулся с открытым сокетом — забирает права хоста
+        # (API.md, «Хост вернулся»). Прежнего хоста понижаем, чтобы роль
+        # host не висела одновременно на двух участниках.
+        previous = room.participants.get(room.host_id)
+        if previous is not None and previous.id != participant.id:
+            previous.role = Role.LISTENER
         participant.role = Role.HOST
-        room.host_id = principal.id
+        room.host_id = participant.id
     elif room.is_host(participant.id):
         participant.role = Role.HOST
     else:
@@ -114,11 +120,13 @@ def detach(room: Room, participant_id: str) -> None:
     room.touch()
 
 
-def drop_participant(room: Room, participant_id: str) -> None:
-    if participant_id == room.creator_id:
-        return
-    room.participants.pop(participant_id, None)
-    room.touch()
+def drop_participant(room: Room, participant_id: str) -> bool:
+    """Убирает участника из комнаты. Создателя тоже: комната живёт до
+    idle-очистки, а вернувшись сокетом, он снова получит права хоста."""
+    removed = room.participants.pop(participant_id, None) is not None
+    if removed:
+        room.touch()
+    return removed
 
 
 def ensure_host(room: Room) -> str | None:

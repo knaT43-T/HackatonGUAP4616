@@ -1,55 +1,165 @@
-# HackatonGUAP4616
+# 🎧 Слушаем вместе
 
-# Слушаем вместе
+Совместное прослушивание музыки: комната живёт на сервере, все участники слышат
+один трек в одной позиции. Управляет воспроизведением хост, остальные добавляют
+треки в общую очередь.
 
-[![Linter](https://github.com/OWNER/REPO/actions/workflows/ci_linter_test.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci_linter_test.yml)
-[![Python Test](https://github.com/OWNER/REPO/actions/workflows/ci_python_test.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci_python_test.yml)
-[![Frontend Build](https://github.com/OWNER/REPO/actions/workflows/ci_frontend_build.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci_frontend_build.yml)
-
----
-
-## 🛠 Необходимое ПО
-
-Перед запуском проекта убедитесь, что у вас установлены:
-
-- 🐋 Docker (версия 20.10 или выше)
+**Стек:** Python 3.11 · FastAPI + WebSocket · Vue 3 + Vite · Docker Compose.
 
 ---
 
-## 🚀 Инструкция по запуску
+## ✨ Возможности
 
-Проект полностью контейнеризирован. Запуск базы данных, создание таблиц и старт приложения происходят автоматически.
+- **Вход без регистрации** — ник, cookie-сессия на 30 дней.
+- **Комнаты** — создание, вход по 8-символьному коду-приглашению, передача
+  прав хоста при уходе, автоочистка неактивных комнат.
+- **Синхронный плеер** — позиция вычисляется от серверного якоря
+  (`position_ms + updated_at`); клиент измеряет смещение часов по ping/pong
+  и корректирует дрейф звука (±4 % скоростью, жёсткий seek при расхождении > 2 с).
+- **Очередь** — добавлять может любой участник, удалять — хост; автопереход
+  к следующему треку по окончании (клиент сообщает серверу длительность).
+- **Каталог** — загрузка своих треков до 50 МБ, раздача через `/media`.
+- **Live-обновления** — WebSocket: play/pause/seek/skip, участники, системные
+  сообщения; реконнект с backoff после обрыва связи.
+- **Наблюдаемость** — `/health` для docker-хелсчека, `/metrics` в формате
+  Prometheus, логи без спама от частых служебных запросов.
 
-### 1. Подготовка окружения
+---
 
-Скопируйте шаблон конфигурации в рабочий файл `.env`:
+## 🚀 Быстрый старт (Docker)
 
 ```bash
-cp env.example .env
+docker compose up --build
 ```
 
-_После копирования вы можете открыть файл `.env` и отредактировать доступы к базе данных, если дефолтные вам не подходят._
+| Что | Адрес |
+|---|---|
+| Фронтенд | http://localhost:5173 |
+| API и Swagger | http://localhost:8000/docs |
+| Healthcheck | http://localhost:8000/health |
+| Метрики (Prometheus) | http://localhost:8000/metrics |
 
-### 2. Запуск проекта
+---
 
-Выполните следующую команду в корневой директории:
+## 🔧 Локальный запуск без Docker
+
+### Backend
 
 ```bash
-docker-compose up --build
+cd backend
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env    # опционально: все настройки имеют дефолты
+python -m app.main      # http://127.0.0.1:8000
 ```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev             # http://localhost:5173
+```
+
+Переменные фронтенда необязательны (см. `frontend/.env.example`): без `.env`
+используется тот же хост, что и у страницы, с портом 8000.
+
+### Тесты и линт (backend)
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest        # смоук: REST + WebSocket + наблюдаемость
+ruff check .            # линт
+```
+
+Смоук-набор поднимает приложение целиком в памяти: вход, комнаты, каталог,
+очередь, плейбек, права host/listener, передача хоста, `/health` и `/metrics`.
+
+---
+
+## 🔍 Логи и мониторинг
+
+- **Логи** — единый формат, уровень из `LOG_LEVEL` (по умолчанию `INFO`).
+  `ACCESS_LOG=false` полностью выключает access-лог. Запросы к `/health` и
+  `/metrics` в него не пишутся — докер-хелсчек не создаёт шум.
+- **`/health`** — версия, uptime, проверка рабочих каталогов, счётчики (комнаты,
+  сокеты, треки, ошибки). Если каталоги недоступны — `503`, контейнер становится
+  unhealthy, оркестратор его перезапустит.
+- **`/metrics`** — формат Prometheus: `http_requests_total` по шаблонам
+  маршрутов, `app_errors_total`, `app_ws_connections_active`, комнаты и треки.
+  Смотрится `curl http://localhost:8000/metrics` или любым скрейпером.
+- **Ошибки** — необработанные исключения логируются с трейсбеком, отвечают
+  JSON `500` и инкрементят `app_errors_total`.
+- **Ротация** — в docker-compose логи контейнеров ограничены
+  (json-file, 10 МБ × 3 файла на сервис).
+
+---
 
 ## 📁 Структура репозитория
 
-- backend — приложение, каталог треков, данные, зависимости, пример env.
-- frontend — исходники, публичные файлы, package.json.
-- docs — документация, включая front.api.md.
-- docker-compose.yml — оркестрация сервисов.
-- README.md — этот файл.
-- .env.example — пример конфигурации.
+```
+├── backend/                 # FastAPI + WebSocket
+│   ├── app/
+│   │   ├── main.py          # сборка приложения, /health, /metrics, запуск
+│   │   ├── api/             # REST-роуты, cookie-сессии, права
+│   │   ├── core/            # модели, сессии, часы, логи, метрики
+│   │   ├── realtime/        # WebSocket: хаб, события, тикер
+│   │   └── services/        # playback, queue, tracks, rooms
+│   ├── tests/               # pytest: REST + WebSocket + наблюдаемость
+│   ├── catalog/             # загруженные треки (создаётся, gitignore)
+│   ├── data/                # метаданные каталога (создаётся, gitignore)
+│   ├── ruff.toml            # конфиг линтера
+│   ├── README.md            # бэкенд: настройки, структура, тесты
+│   └── .env.example         # шаблон настроек
+├── frontend/                # Vue 3 + Vite
+│   ├── src/                 # api, state, ws, components, views, styles
+│   ├── nginx.conf           # заготовка прод-конфига (статика + прокси)
+│   ├── README.md            # фронтенд: запуск, структура, сборка
+│   └── .env.example         # адреса API/WS (необязательны)
+├── docker-compose.yml
+├── API.md                   # спецификация REST + WebSocket
+├── front.md                 # документация фронтенда
+└── README.md                # этот файл
+```
 
 ---
 
-#### Разработчики
+## 📚 Документация
+
+| Документ | О чём |
+|---|---|
+| [API.md](API.md) | REST + WebSocket, синхронизация времени, коды ошибок |
+| [front.md](front.md) | фронтенд: компоненты, правила синхронизации, деплой |
+| [backend/README.md](backend/README.md) | бэкенд: структура, переменные окружения, тесты |
+| [frontend/README.md](frontend/README.md) | фронтенд: структура, запуск, сборка |
+
+---
+
+## 📌 Статус
+
+**MVP готов целиком — backend и frontend:**
+
+- Вход по нику (cookie-сессия), создание комнаты и вход по коду приглашения.
+- WebSocket: play/pause/seek/skip, очередь, участники, передача прав хоста,
+  синхронизация позиции через якорь `position_ms + updated_at`.
+- Каталог треков: загрузка (до 50 МБ), раздача через `/media`, автопереключение
+  по окончании трека (клиент сообщает длительность).
+- Фронтенд: вход, приватные маршруты, создание/вход в комнату, плеер с
+  коррекцией часов и дрейфа, очередь с добавлением/удалением, загрузка треков,
+  live-обновления участников и тосты.
+- Наблюдаемость: логи, `/health`, `/metrics`, перехват необработанных ошибок.
+- Тесты: pytest-смоук полного пути — запускается одной командой.
+
+**Дальше (после MVP):** чат комнаты, реакции, публичные комнаты, мобильная
+адаптация, тёмная тема, PWA — подробнее в `front.md`, раздел 17.
+
+---
+
+## 👥 Команда
 
 - Кирилл — DevOps / инфраструктура / деплой
 - Андрей — Backend-разработчик / API / WebSocket / синхронизация

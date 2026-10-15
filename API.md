@@ -18,7 +18,8 @@ pip install -r requirements.txt
 python -m app.main
 ```
 
-Сервер: `http://127.0.0.1:8000`. Настройки — в `.env` (образец — `.env.example`).
+Сервер: `http://127.0.0.1:8000`. Настройки — в `backend/.env`
+(образец — `backend/.env.example`; все значения имеют дефолты).
 
 **CORS.** Фронтенд на `localhost:5173` или `localhost:3000` работает сразу.
 Если фронт на другом адресе — добавь origin в `CORS_ORIGINS` в `.env` и перезапусти.
@@ -109,7 +110,10 @@ const res = await fetch('http://127.0.0.1:8000/api/auth/guest', {
   "created_at": 1791922519344, "url": "/media/a1b2c3d4.mp3" }
 ```
 
-`url` отдаётся с бэкенда — играть можно сразу, отдельный хостинг не нужен.
+`url` — путь от бэкенда (например, `/media/a1b2c3d4.mp3`), отдельный хостинг не
+нужен. Путь **относительный**: клиент склеивает его с базовым адресом API
+(`API_URL + track.url`). Если фронт и бэкенд стоят за одним прокси (см.
+`frontend/nginx.conf`), путь можно использовать как есть.
 
 **Элемент очереди**
 
@@ -164,6 +168,11 @@ const res = await fetch('http://127.0.0.1:8000/api/auth/guest', {
 
 Создатель комнаты автоматически становится `host`.
 
+Выход из комнаты (`POST .../leave`) рассылает остальным `members_update`;
+если ушедший был хостом — придёт ещё и `system` о передаче управления.
+Выйти может и создатель: комната не удаляется, а живёт до idle-очистки (§10),
+и при возвращении сокетом создатель снова становится хостом.
+
 ```bash
 curl -X POST http://127.0.0.1:8000/api/rooms \
   -H "Content-Type: application/json" -b cookies.txt \
@@ -207,8 +216,47 @@ curl -X POST http://127.0.0.1:8000/api/tracks/upload \
 
 | Метод | Путь | Описание |
 |---|---|---|
-| `GET` | `/health` | статус, число комнат, сокетов, треков |
+| `GET` | `/health` | Статус сервиса: версия, uptime, проверка каталогов, счётчики |
+| `GET` | `/metrics` | Метрики в формате Prometheus |
 | `GET` | `/docs` | Swagger UI |
+
+### `/health`
+
+Отдаёт `ok`, когда рабочие каталоги на месте. Если `catalog` или `data`
+недоступны — возвращает `503` и `"status": "degraded"`, чтобы оркестратор
+перезапустил контейнер. Запросы к `/health` не пишутся в access-лог.
+
+```json
+{
+  "status": "ok",
+  "version": "1.0.0",
+  "uptime_s": 42,
+  "server_time": 1792073995984,
+  "checks": { "catalog_dir": true, "data_dir": true },
+  "tracks": 2,
+  "sockets": 1,
+  "errors_total": 0,
+  "rooms": 2,
+  "playing": 1,
+  "connections": 1
+}
+```
+
+### `/metrics`
+
+Формат Prometheus — скрейпится любым агентом. Запросы считаются по
+**шаблону** маршрута (`/api/rooms/{room_id}`), чтобы метки не раздувались
+на каждом id. Необработанные ошибки (ответ `500` с телом
+`{"detail": "Внутренняя ошибка сервера"}`) попадают в `app_errors_total`.
+
+```
+http_requests_total{method="GET",path="/api/rooms/{room_id}",status="200"} 12
+http_requests_total{method="GET",path="unmatched",status="404"} 3
+app_errors_total 0
+app_ws_connections_active 2
+app_rooms_total 1
+app_uptime_seconds 3600
+```
 
 ---
 
@@ -417,6 +465,8 @@ audio.addEventListener('loadedmetadata', () => {
 - **`item_id`** для `track_loaded` и `queue_remove` — это id элемента **очереди**,
   а не трека. Бери из `state.item_id` или из `queue[].id`.
 - **Название комнаты и ник** — обязательные непустые строки, ник до 32 символов.
-- **Код приглашения** — 8 символов, регистр важен: `UXYZJ5HS` ≠ `uxyzj5hs`.
+- **Код приглашения** — 8 символов; регистр не важен: `uxyzj5hs` сработает как `UXYZJ5HS`.
 - **Вкладка в фоне** браузеры душат таймеры — при `visibilitychange` пошли `ping`
   и пересчитай позицию, иначе после возврата на вкладку позиция уедет.
+- **HTTPS-деплой:** поставь `COOKIE_SECURE=true` в `backend/.env` — cookie начнёт
+  отдаваться только по HTTPS.

@@ -223,3 +223,8 @@ __marimo__/
 backend/catalog/
 backend/data/
 backend/.env
+
+# Фронтенд «Слушаем вместе»
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

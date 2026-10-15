@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.api.deps import get_principal
 from app.config import settings
@@ -25,6 +25,7 @@ async def enter_as_guest(payload: GuestRequest, response: Response) -> dict:
         max_age=settings.session_ttl_days * 24 * 60 * 60,
         httponly=True,
         samesite="lax",
+        secure=settings.cookie_secure,
         path="/",
     )
     return {"participant_id": session.id, "nickname": session.nickname}

@@ -19,7 +19,9 @@ from app.realtime.events import (
     system_event,
 )
 from app.realtime.hub import hub
-from app.services import playback, queue as queue_service, rooms as rooms_service
+from app.services import playback
+from app.services import queue as queue_service
+from app.services import rooms as rooms_service
 
 log = logging.getLogger("ws")
 
@@ -27,7 +29,7 @@ router = APIRouter()
 
 WS_NOT_FOUND = 4401
 WS_GONE = 4404
-HOST_ONLY = "Управлять воспроизведением может только создатель комнаты"
+HOST_ONLY = "Управлять воспроизведением может только хост комнаты"
 NOT_IN_ROOM = "Сначала отправь команду join с room_id"
 
 

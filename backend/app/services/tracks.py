@@ -54,19 +54,6 @@ def get_track(track_id: str) -> dict[str, Any] | None:
     return _catalog.get(track_id)
 
 
-async def delete_track(track_id: str) -> bool:
-    track = _catalog.get(track_id)
-    if track is None:
-        return False
-    async with _lock:
-        _catalog.pop(track_id, None)
-        await _persist()
-    path = settings.catalog_dir / track["filename"]
-    if path.exists():
-        await asyncio.to_thread(path.unlink)
-    return True
-
-
 def _validate(filename: str, content_type: str | None, size: int) -> str:
     ext = Path(filename or "").suffix.lower()
     if ext not in settings.allowed_audio_ext:

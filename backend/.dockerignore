@@ -1,0 +1,10 @@
+# Локальные данные и секреты не должны попадать в образ
+.env
+catalog/
+data/
+
+# Python-мусор
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
